@@ -1,4 +1,4 @@
-# TermWarp
+# TermWrap
 
 My rewrite of [rdpwrap](https://github.com/stascorp/rdpwrap)
 
