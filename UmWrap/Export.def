@@ -1,0 +1,4 @@
+LIBRARY   UmWrap
+EXPORTS
+   ServiceMain
+   SvchostPushServiceGlobals
