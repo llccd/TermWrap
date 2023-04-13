@@ -32,19 +32,20 @@ bool searchPatch(ZydisDecoder* decoder, DWORD64 base, PRUNTIME_FUNCTION func, DW
 	auto IP = base + func->BeginAddress;
 	auto length = (ZyanUSize)func->EndAddress - func->BeginAddress;
 	ZydisDecodedInstruction instruction;
+	ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 
-	while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)))
+	while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 	{
 		IP += instruction.length;
 		length -= instruction.length;
 		if (instruction.mnemonic == ZYDIS_MNEMONIC_LEA &&
-			instruction.operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-			instruction.operands[1].mem.base == ZYDIS_REGISTER_RIP &&
-			instruction.operands[1].mem.disp.value + IP == target + base &&
-			instruction.operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER)
+			operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+			operands[1].mem.base == ZYDIS_REGISTER_RIP &&
+			operands[1].mem.disp.value + IP == target + base &&
+			operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER)
 		{
 			length = 16;
-			while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction))) {
+			while (ZYAN_SUCCESS(ZydisDecoderDecodeInstruction(decoder, (ZydisDecoderContext*)0, (void*)IP, length, &instruction))) {
 				if (instruction.mnemonic == ZYDIS_MNEMONIC_CALL && instruction.length == 5) {
 					size_t written = 0;
 					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB8\x01\x00\x00\x00", 5, &written);
@@ -78,7 +79,7 @@ void patch(HMODULE hMod)
 	if (!FunctionTableSize) return;
 
 	ZydisDecoder decoder;
-	ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
+	ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64);
 	auto patched = false;
 
 	for (DWORD i = 0; i < FunctionTableSize; i++) {

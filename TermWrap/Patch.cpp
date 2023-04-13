@@ -61,16 +61,17 @@ DWORD64 searchXref(ZydisDecoder* decoder, DWORD64 base, PRUNTIME_FUNCTION func, 
 	auto IP = base + func->BeginAddress;
 	auto length = (ZyanUSize)func->EndAddress - func->BeginAddress;
 	ZydisDecodedInstruction instruction;
+	ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 
-	while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)))
+	while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 	{
 		IP += instruction.length;
 		length -= instruction.length;
 		if (instruction.mnemonic == ZYDIS_MNEMONIC_LEA &&
-			instruction.operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-			instruction.operands[1].mem.base == ZYDIS_REGISTER_RIP &&
-			instruction.operands[1].mem.disp.value + IP == target + base &&
-			instruction.operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER)
+			operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+			operands[1].mem.base == ZYDIS_REGISTER_RIP &&
+			operands[1].mem.disp.value + IP == target + base &&
+			operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER)
 			return IP - base;
 	}
 
@@ -114,58 +115,59 @@ DWORD64 findImportFunction(PIMAGE_IMPORT_DESCRIPTOR pImportDescriptor, DWORD64 b
 void LocalOnlyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 target) {
 	ZyanUSize length = 256;
 	ZydisDecodedInstruction instruction;
+	ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 	auto IP = RVA + base;
 	target += base;
 	size_t written = 0;
 
-	while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)))
+	while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 	{
 		IP += instruction.length;
 		length -= instruction.length;
 		if (instruction.mnemonic == ZYDIS_MNEMONIC_CALL &&
-			instruction.operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
-			instruction.operands[0].imm.is_relative == ZYAN_TRUE &&
-			instruction.operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-			instruction.operands[1].reg.value == ZYDIS_REGISTER_RIP &&
-			target == IP + instruction.operands[0].imm.value.u)
+			operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
+			operands[0].imm.is_relative == ZYAN_TRUE &&
+			operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+			operands[1].reg.value == ZYDIS_REGISTER_RIP &&
+			target == IP + operands[0].imm.value.u)
 		{
-			if (!ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)) ||
+			if (!ZYAN_SUCCESS(ZydisDecoderDecodeInstruction(decoder, (ZydisDecoderContext*)0, (void*)IP, length, &instruction)) ||
 				instruction.mnemonic != ZYDIS_MNEMONIC_TEST) break;
 
 			IP += instruction.length;
 			length -= instruction.length;
-			if (!ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)) ||
+			if (!ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)) ||
 				instruction.operand_count != 3 ||
-				instruction.operands[0].type != ZYDIS_OPERAND_TYPE_IMMEDIATE ||
-				instruction.operands[0].imm.is_relative != ZYAN_TRUE ||
-				instruction.operands[1].type != ZYDIS_OPERAND_TYPE_REGISTER ||
-				instruction.operands[1].reg.value != ZYDIS_REGISTER_RIP) break;
+				operands[0].type != ZYDIS_OPERAND_TYPE_IMMEDIATE ||
+				operands[0].imm.is_relative != ZYAN_TRUE ||
+				operands[1].type != ZYDIS_OPERAND_TYPE_REGISTER ||
+				operands[1].reg.value != ZYDIS_REGISTER_RIP) break;
 
 			if (instruction.mnemonic == ZYDIS_MNEMONIC_JNS)
 			{
 				target = IP + instruction.length;
-				IP = target + instruction.operands[0].imm.value.u;
+				IP = target + operands[0].imm.value.u;
 			}
 			else if (instruction.mnemonic != ZYDIS_MNEMONIC_JS) break;
 			else
 			{
 				IP += instruction.length;
-				target = IP + instruction.operands[0].imm.value.u;
+				target = IP + operands[0].imm.value.u;
 			}
 
 			length -= instruction.length;
-			if (!ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)) ||
+			if (!ZYAN_SUCCESS(ZydisDecoderDecodeInstruction(decoder, (ZydisDecoderContext*)0, (void*)IP, length, &instruction)) ||
 				instruction.mnemonic != ZYDIS_MNEMONIC_CMP) break;
 
 			IP += instruction.length;
 			length -= instruction.length;
-			if (!ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)) ||
+			if (!ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)) ||
 				instruction.mnemonic != ZYDIS_MNEMONIC_JZ ||
-				instruction.operands[0].type != ZYDIS_OPERAND_TYPE_IMMEDIATE ||
-				instruction.operands[0].imm.is_relative != ZYAN_TRUE ||
-				instruction.operands[1].type != ZYDIS_OPERAND_TYPE_REGISTER ||
-				instruction.operands[1].reg.value != ZYDIS_REGISTER_RIP ||
-				target != IP + instruction.operands[0].imm.value.u + instruction.length) break;
+				operands[0].type != ZYDIS_OPERAND_TYPE_IMMEDIATE ||
+				operands[0].imm.is_relative != ZYAN_TRUE ||
+				operands[1].type != ZYDIS_OPERAND_TYPE_REGISTER ||
+				operands[1].reg.value != ZYDIS_REGISTER_RIP ||
+				target != IP + operands[0].imm.value.u + instruction.length) break;
 
 			if (instruction.raw.imm[0].offset == 2) WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\x90\xE9", 2, &written);
 			else WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xEB", 1, &written);
@@ -180,21 +182,22 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 	ZyanUSize length = 128;
 	ZyanUSize lastLength = 0;
 	ZydisDecodedInstruction instruction;
+	ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 	auto IP = RVA + base;
 	size_t written = 0;
 
-	while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)))
+	while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 	{
 		if (instruction.mnemonic == ZYDIS_MNEMONIC_CMP &&
-			instruction.operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-			instruction.operands[0].mem.disp.value == 0x63c &&
-			instruction.operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER)
+			operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+			operands[0].mem.disp.value == 0x63c &&
+			operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER)
 		{
-			auto reg1 = instruction.operands[1].reg.value;
-			auto reg2 = instruction.operands[0].mem.base;
+			auto reg1 = operands[1].reg.value;
+			auto reg2 = operands[0].mem.base;
 
 			length -= instruction.length;
-			if (!ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)(IP + instruction.length), length, &instruction)))
+			if (!ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)(IP + instruction.length), length, &instruction, operands)))
 				break;
 
 			if (instruction.mnemonic == ZYDIS_MNEMONIC_JNZ)
@@ -223,7 +226,7 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 				break;
 
 			if (reg1 == ZYDIS_REGISTER_EDX) {
-				if (instruction.operands[0].mem.base != ZYDIS_REGISTER_ECX) {
+				if (operands[0].mem.base != ZYDIS_REGISTER_ECX) {
 					OutputDebugStringA("DefPolicyPatch: Unknown reg2");
 					return;
 				}
@@ -231,7 +234,7 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 				return;
 			}
 			else if (reg1 == ZYDIS_REGISTER_EDI) {
-				if (instruction.operands[0].mem.base != ZYDIS_REGISTER_RCX) {
+				if (operands[0].mem.base != ZYDIS_REGISTER_RCX) {
 					OutputDebugStringA("DefPolicyPatch: Unknown reg2");
 					return;
 				}
@@ -273,40 +276,41 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 int SingleUserPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 target) {
 	ZyanUSize length = 128;
 	ZydisDecodedInstruction instruction;
+	ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 	auto IP = RVA + base;
 	target += base;
 	size_t written = 0;
 
-	while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)))
+	while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 	{
 		IP += instruction.length;
 		length -= instruction.length;
 		if (instruction.mnemonic == ZYDIS_MNEMONIC_CALL &&
-			instruction.operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
-			instruction.operands[0].imm.is_relative == ZYAN_TRUE &&
-			instruction.operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-			instruction.operands[1].reg.value == ZYDIS_REGISTER_RIP)
+			operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
+			operands[0].imm.is_relative == ZYAN_TRUE &&
+			operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+			operands[1].reg.value == ZYDIS_REGISTER_RIP)
 		{
-			auto jmp_addr = IP + instruction.operands[0].imm.value.u;
-			if (!ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)jmp_addr, length, &instruction)) ||
+			auto jmp_addr = IP + operands[0].imm.value.u;
+			if (!ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)jmp_addr, length, &instruction, operands)) ||
 				instruction.mnemonic != ZYDIS_MNEMONIC_JMP ||
-				instruction.operands[0].type != ZYDIS_OPERAND_TYPE_MEMORY ||
-				instruction.operands[0].mem.base != ZYDIS_REGISTER_RIP ||
-				instruction.operands[1].type != ZYDIS_OPERAND_TYPE_REGISTER ||
-				instruction.operands[1].reg.value != ZYDIS_REGISTER_RIP ||
-				instruction.operands[0].mem.disp.value + jmp_addr + instruction.length != target) continue;
+				operands[0].type != ZYDIS_OPERAND_TYPE_MEMORY ||
+				operands[0].mem.base != ZYDIS_REGISTER_RIP ||
+				operands[1].type != ZYDIS_OPERAND_TYPE_REGISTER ||
+				operands[1].reg.value != ZYDIS_REGISTER_RIP ||
+				operands[0].mem.disp.value + jmp_addr + instruction.length != target) continue;
 
-			while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)))
+			while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 			{
 				if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
-					instruction.operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
-					instruction.operands[1].imm.value.u == 1)
+					operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
+					operands[1].imm.value.u == 1)
 				{
 					WriteProcessMemory(GetCurrentProcess(), (void*)(IP + instruction.raw.imm[0].offset), "\x00", 1, &written);
 					return 1;
 				}
 				else if (instruction.mnemonic == ZYDIS_MNEMONIC_INC &&
-					instruction.operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER)
+					operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER)
 				{
 					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\x90", 1, &written);
 					return 1;
@@ -323,20 +327,21 @@ int SingleUserPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 ta
 void NonRDPPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 target) {
 	ZyanUSize length = 256;
 	ZydisDecodedInstruction instruction;
+	ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 	auto IP = RVA + base;
 	target += base;
 	size_t written = 0;
 
-	while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)))
+	while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 	{
 		IP += instruction.length;
 		length -= instruction.length;
 		if (instruction.mnemonic == ZYDIS_MNEMONIC_CALL &&
-			instruction.operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
-			instruction.operands[0].imm.is_relative == ZYAN_TRUE &&
-			instruction.operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-			instruction.operands[1].reg.value == ZYDIS_REGISTER_RIP &&
-			target == IP + instruction.operands[0].imm.value.u)
+			operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
+			operands[0].imm.is_relative == ZYAN_TRUE &&
+			operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+			operands[1].reg.value == ZYDIS_REGISTER_RIP &&
+			target == IP + operands[0].imm.value.u)
 		{
 
 			if (instruction.length != 5) break;
@@ -353,33 +358,34 @@ void NonRDPPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 targe
 DWORD64 PropertyDeviceAddr(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 target) {
 	ZyanUSize length = 256;
 	ZydisDecodedInstruction instruction;
+	ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 	auto IP = RVA + base;
 	target += base;
 
-	while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)))
+	while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 	{
 		IP += instruction.length;
 		length -= instruction.length;
 		if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
-			instruction.operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-			instruction.operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-			instruction.operands[1].mem.base == ZYDIS_REGISTER_RIP &&
-			target == IP + instruction.operands[1].mem.disp.value)
+			operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+			operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+			operands[1].mem.base == ZYDIS_REGISTER_RIP &&
+			target == IP + operands[1].mem.disp.value)
 		{
-			while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)))
+			while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 			{
 				IP += instruction.length;
 				length -= instruction.length;
 
 				if (instruction.mnemonic == ZYDIS_MNEMONIC_JZ || instruction.mnemonic == ZYDIS_MNEMONIC_JMP)
-					IP += instruction.operands[0].imm.value.u;
+					IP += operands[0].imm.value.u;
 
 				else if (instruction.mnemonic == ZYDIS_MNEMONIC_CALL &&
-					instruction.operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
-					instruction.operands[0].imm.is_relative == ZYAN_TRUE &&
-					instruction.operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-					instruction.operands[1].reg.value == ZYDIS_REGISTER_RIP)
-					return IP + instruction.operands[0].imm.value.u - base;
+					operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
+					operands[0].imm.is_relative == ZYAN_TRUE &&
+					operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+					operands[1].reg.value == ZYDIS_REGISTER_RIP)
+					return IP + operands[0].imm.value.u - base;
 			}
 		}
 	}
@@ -389,27 +395,28 @@ DWORD64 PropertyDeviceAddr(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWO
 void PropertyDevicePatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 	ZyanUSize length = 256;
 	ZydisDecodedInstruction instruction;
+	ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 	auto IP = RVA + base;
 	size_t written = 0;
 
-	while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)))
+	while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 	{
 		IP += instruction.length;
 		length -= instruction.length;
-		if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV && instruction.operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-			instruction.operands[0].size == 32 && instruction.operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-			instruction.operands[1].mem.base != ZYDIS_REGISTER_RIP && instruction.operands[1].mem.disp.value == 0x1f00)
+		if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV && operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+			operands[0].size == 32 && operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+			operands[1].mem.base != ZYDIS_REGISTER_RIP && operands[1].mem.disp.value == 0x1f00)
 		{
-			auto reg = instruction.operands[0].reg.value;
-			while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)IP, length, &instruction)))
+			auto reg = operands[0].reg.value;
+			while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 			{
-				if (instruction.mnemonic == ZYDIS_MNEMONIC_SHR && instruction.operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-					instruction.operands[0].reg.value == reg && instruction.operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
-					instruction.operands[1].imm.value.u == 0x0b)
+				if (instruction.mnemonic == ZYDIS_MNEMONIC_SHR && operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+					operands[0].reg.value == reg && operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
+					operands[1].imm.value.u == 0x0b)
 				{
-					if (!ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(decoder, (void*)(IP + instruction.length), length, &instruction)) ||
-						instruction.mnemonic != ZYDIS_MNEMONIC_AND || instruction.operands[0].type != ZYDIS_OPERAND_TYPE_REGISTER ||
-						instruction.operands[0].reg.value != reg || instruction.length > 3) break;
+					if (!ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)(IP + instruction.length), length, &instruction, operands)) ||
+						instruction.mnemonic != ZYDIS_MNEMONIC_AND || operands[0].type != ZYDIS_OPERAND_TYPE_REGISTER ||
+						operands[0].reg.value != reg || instruction.length > 3) break;
 
 					switch (reg) {
 					case ZYDIS_REGISTER_EAX:
@@ -468,7 +475,7 @@ void patch(HMODULE hMod)
 	PRUNTIME_FUNCTION CSLQuery_Initialize_func = NULL;
 
 	ZydisDecoder decoder;
-	ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
+	ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64);
 
 	for (DWORD i = 0; i < FunctionTableSize; i++) {
 		if (!CDefPolicy_Query_addr && searchXref(&decoder, base, FunctionTable + i, CDefPolicy_Query))
@@ -514,6 +521,7 @@ void patch(HMODULE hMod)
 	auto IP = CSLQuery_Initialize_func->BeginAddress + base;
 	auto length = (ZyanUSize)CSLQuery_Initialize_func->EndAddress - CSLQuery_Initialize_func->BeginAddress;
 	ZydisDecodedInstruction instruction;
+	ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 
 	if (GetInstanceOfTSLicense_addr)
 	{
@@ -551,80 +559,80 @@ void patch(HMODULE hMod)
 	DWORD64 bInitialized_addr = 0;
 
 	if (length > 100)
-		while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, (void*)IP, length, &instruction)))
+		while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(&decoder, (void*)IP, length, &instruction, operands)))
 		{
 			IP += instruction.length;
 			length -= instruction.length;
 			if (!found && instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
-				instruction.operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-				instruction.operands[0].mem.base == ZYDIS_REGISTER_RIP &&
-				instruction.operands[0].mem.disp.has_displacement == ZYAN_TRUE &&
-				instruction.operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-				instruction.operands[1].reg.value == ZYDIS_REGISTER_EAX)
+				operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+				operands[0].mem.base == ZYDIS_REGISTER_RIP &&
+				operands[0].mem.disp.has_displacement == ZYAN_TRUE &&
+				operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+				operands[1].reg.value == ZYDIS_REGISTER_EAX)
 			{
 				found = true;
-				*(DWORD*)(instruction.operands[0].mem.disp.value + IP) = 1;
+				*(DWORD*)(operands[0].mem.disp.value + IP) = 1;
 			}
 			else if (instruction.mnemonic == ZYDIS_MNEMONIC_LEA &&
-				instruction.operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-				instruction.operands[1].mem.base == ZYDIS_REGISTER_RIP &&
-				instruction.operands[1].mem.disp.has_displacement == ZYAN_TRUE &&
-				instruction.operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-				instruction.operands[0].reg.value == ZYDIS_REGISTER_RCX)
+				operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+				operands[1].mem.base == ZYDIS_REGISTER_RIP &&
+				operands[1].mem.disp.has_displacement == ZYAN_TRUE &&
+				operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+				operands[0].reg.value == ZYDIS_REGISTER_RCX)
 			{
-				DWORD64 target = instruction.operands[1].mem.disp.value + IP - base;
+				DWORD64 target = operands[1].mem.disp.value + IP - base;
 				if (target == bRemoteConnAllowed || target == bFUSEnabled || target == bAppServerAllowed || target == bMultimonAllowed)
 					found = false;
 			}
 			else if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
-				instruction.operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-				instruction.operands[0].mem.base == ZYDIS_REGISTER_RIP &&
-				instruction.operands[0].mem.disp.has_displacement == ZYAN_TRUE &&
-				instruction.operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
-				instruction.operands[1].imm.value.u == 1) {
-				bInitialized_addr = instruction.operands[0].mem.disp.value + IP;
+				operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+				operands[0].mem.base == ZYDIS_REGISTER_RIP &&
+				operands[0].mem.disp.has_displacement == ZYAN_TRUE &&
+				operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
+				operands[1].imm.value.u == 1) {
+				bInitialized_addr = operands[0].mem.disp.value + IP;
 				break;
 			}
 		}
 	else {
 		length = 0x11000;
-		while (ZYAN_SUCCESS(ZydisDecoderDecodeBuffer(&decoder, (void*)IP, length, &instruction)))
+		while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(&decoder, (void*)IP, length, &instruction, operands)))
 		{
 			IP += instruction.length;
 			length -= instruction.length;
 			if (instruction.mnemonic == ZYDIS_MNEMONIC_JMP &&
-				instruction.operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
-				instruction.operands[0].imm.is_relative == ZYAN_TRUE &&
-				instruction.operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-				instruction.operands[1].reg.value == ZYDIS_REGISTER_RIP)
-				IP += instruction.operands[0].imm.value.u;
+				operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
+				operands[0].imm.is_relative == ZYAN_TRUE &&
+				operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+				operands[1].reg.value == ZYDIS_REGISTER_RIP)
+				IP += operands[0].imm.value.u;
 			else if (!found && instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
-				instruction.operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-				instruction.operands[0].mem.base == ZYDIS_REGISTER_RIP &&
-				instruction.operands[0].mem.disp.has_displacement == ZYAN_TRUE &&
-				instruction.operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER)
+				operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+				operands[0].mem.base == ZYDIS_REGISTER_RIP &&
+				operands[0].mem.disp.has_displacement == ZYAN_TRUE &&
+				operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER)
 			{
 				found = true;
-				*(DWORD*)(instruction.operands[0].mem.disp.value + IP) = 1;
+				*(DWORD*)(operands[0].mem.disp.value + IP) = 1;
 			}
 			else if (instruction.mnemonic == ZYDIS_MNEMONIC_LEA &&
-				instruction.operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-				instruction.operands[1].mem.base == ZYDIS_REGISTER_RIP &&
-				instruction.operands[1].mem.disp.has_displacement == ZYAN_TRUE &&
-				instruction.operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-				instruction.operands[0].reg.value == ZYDIS_REGISTER_RDX)
+				operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+				operands[1].mem.base == ZYDIS_REGISTER_RIP &&
+				operands[1].mem.disp.has_displacement == ZYAN_TRUE &&
+				operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+				operands[0].reg.value == ZYDIS_REGISTER_RDX)
 			{
-				DWORD64 target = instruction.operands[1].mem.disp.value + IP - base;
+				DWORD64 target = operands[1].mem.disp.value + IP - base;
 				if (target == bRemoteConnAllowed || target == bFUSEnabled || target == bAppServerAllowed || target == bMultimonAllowed)
 					found = false;
 			}
 			else if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
-				instruction.operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-				instruction.operands[0].mem.base == ZYDIS_REGISTER_RIP &&
-				instruction.operands[0].mem.disp.has_displacement == ZYAN_TRUE &&
-				instruction.operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-				instruction.operands[1].reg.value == ZYDIS_REGISTER_EAX)
-				bInitialized_addr = instruction.operands[0].mem.disp.value + IP;
+				operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+				operands[0].mem.base == ZYDIS_REGISTER_RIP &&
+				operands[0].mem.disp.has_displacement == ZYAN_TRUE &&
+				operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+				operands[1].reg.value == ZYDIS_REGISTER_EAX)
+				bInitialized_addr = operands[0].mem.disp.value + IP;
 			else if (instruction.mnemonic == ZYDIS_MNEMONIC_RET)
 				break;
 		}

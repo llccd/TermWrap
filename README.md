@@ -4,13 +4,13 @@ My rewrite of [rdpwrap](https://github.com/stascorp/rdpwrap)
 
 ## Compared to original rdpwrap
 
-1. Dropped x86 and older version that no longer reveive updates, mainly focus on win10/11 x64 support
+1. Only support x64-based systems and patch process mainly focus on win10/11 (TermWrap still works on older x64 systems starting from vista)
 
-2. Integrated [RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder), patch offsets are automatically calculated, no rdpwrap.ini anymore
+2. Integrated [RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder), patch offsets are automatically calculated, no annoying ini update anymore
 
 3. Fixed incorrect SingleUserPatch that prevents same user have multiple session simultaneously
 
-4. Enabled camera and USB redirection of all SKUs
+4. Enabled camera and USB redirection for all SKUs by additional wrap of UmRdpService (UmWrap works on win8 and newer systems)
 
 ## Usage
 
@@ -22,4 +22,4 @@ Copy 3 dlls to "%ProgramFiles%\RDP Wrapper\" and merge "install.reg", then reboo
 
 ### Uninstall
 
-Merge "uninstall.reg" and reboot system, then delete 3 dlls
+Merge "uninstall.reg" and reboot system, then delete files in "%ProgramFiles%\RDP Wrapper\"
