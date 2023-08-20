@@ -175,7 +175,7 @@ void LocalOnlyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 ta
 			return;
 		}
 	}
-	OutputDebugStringA("LocalOnlyPatch not found");
+	OutputDebugStringA("LocalOnlyPatch not found\n");
 }
 
 void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
@@ -205,7 +205,7 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 				IP -= lastLength;
 
 				if (reg1 != ZYDIS_REGISTER_EAX) {
-					OutputDebugStringA("DefPolicyPatch: Unknown reg1");
+					OutputDebugStringA("DefPolicyPatch: Unknown reg1\n");
 					return;
 				}
 
@@ -217,7 +217,7 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB8\x00\x01\x00\x00\x89\x81\x20\x03\x00\x00\xEB\x0E", 13, &written);
 					break;
 				default:
-					OutputDebugStringA("DefPolicyPatch: Unknown reg2");
+					OutputDebugStringA("DefPolicyPatch: Unknown reg2\n");
 					break;
 				}
 				return;
@@ -227,7 +227,7 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 
 			if (reg1 == ZYDIS_REGISTER_EDX) {
 				if (operands[0].mem.base != ZYDIS_REGISTER_ECX) {
-					OutputDebugStringA("DefPolicyPatch: Unknown reg2");
+					OutputDebugStringA("DefPolicyPatch: Unknown reg2\n");
 					return;
 				}
 				WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xBA\x00\x01\x00\x00\x89\x91\x20\x03\x00\x00\x5E\x90", 13, &written);
@@ -235,14 +235,14 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 			}
 			else if (reg1 == ZYDIS_REGISTER_EDI) {
 				if (operands[0].mem.base != ZYDIS_REGISTER_RCX) {
-					OutputDebugStringA("DefPolicyPatch: Unknown reg2");
+					OutputDebugStringA("DefPolicyPatch: Unknown reg2\n");
 					return;
 				}
 				WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xBF\x00\x01\x00\x00\x89\xB9\x38\x06\x00\x00\x90\x90\x90", 14, &written);
 				return;
 			}
 			else if (reg1 != ZYDIS_REGISTER_EAX) {
-				OutputDebugStringA("DefPolicyPatch: Unknown reg1");
+				OutputDebugStringA("DefPolicyPatch: Unknown reg1\n");
 				return;
 			}
 
@@ -260,7 +260,7 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 				WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB8\x00\x01\x00\x00\x89\x87\x38\x06\x00\x00\x90", 12, &written);
 				break;
 			default:
-				OutputDebugStringA("DefPolicyPatch: Unknown reg2");
+				OutputDebugStringA("DefPolicyPatch: Unknown reg2\n");
 				break;
 			}
 			return;
@@ -270,7 +270,7 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 		length -= instruction.length;
 		lastLength = instruction.length;
 	}
-	OutputDebugStringA("DefPolicyPatch not found");
+	OutputDebugStringA("DefPolicyPatch not found\n");
 }
 
 int SingleUserPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 target) {
@@ -324,7 +324,7 @@ int SingleUserPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 ta
 	return 0;
 }
 
-void NonRDPPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 target) {
+int NonRDPPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 target) {
 	ZyanUSize length = 256;
 	ZydisDecodedInstruction instruction;
 	ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
@@ -349,10 +349,10 @@ void NonRDPPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 targe
 			// xor eax, eax
 			// nop
 			WriteProcessMemory(GetCurrentProcess(), (void*)(IP - instruction.length), "\xFF\x01\x31\xC0\x90", 5, &written);
-			return;
+			return 1;
 		}
 	}
-	OutputDebugStringA("NonRDPPatch not found");
+	return 0;
 }
 
 DWORD64 PropertyDeviceAddr(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 target) {
@@ -369,8 +369,8 @@ DWORD64 PropertyDeviceAddr(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWO
 		if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
 			operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
 			operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-			operands[1].mem.base == ZYDIS_REGISTER_RIP &&
-			target == IP + operands[1].mem.disp.value)
+			(operands[1].mem.base == ZYDIS_REGISTER_RIP && target == IP + operands[1].mem.disp.value ||
+			operands[1].mem.segment == ZYDIS_REGISTER_DS && target == base + operands[1].mem.disp.value))
 		{
 			while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 			{
@@ -405,7 +405,7 @@ void PropertyDevicePatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 		length -= instruction.length;
 		if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV && operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
 			operands[0].size == 32 && operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-			operands[1].mem.base != ZYDIS_REGISTER_RIP && operands[1].mem.disp.value == 0x1f00)
+			operands[1].mem.base != ZYDIS_REGISTER_RIP && (operands[1].mem.disp.value == 0x1f00 || operands[1].mem.disp.value == 0x1f28))
 		{
 			auto reg = operands[0].reg.value;
 			while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
@@ -426,7 +426,7 @@ void PropertyDevicePatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 						WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB9\x00\x00\x00\x00\x90", 3 + instruction.length, &written);
 						break;
 					default:
-						OutputDebugStringA("PropertyPatch: Unknown reg");
+						OutputDebugStringA("PropertyPatch: Unknown reg\n");
 						break;
 					}
 					return;
@@ -437,7 +437,7 @@ void PropertyDevicePatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 			break;
 		}
 	}
-	OutputDebugStringA("PropertyPatch not found");
+	OutputDebugStringA("PropertyPatch not found\n");
 }
 
 void patch(HMODULE hMod)
@@ -476,6 +476,7 @@ void patch(HMODULE hMod)
 
 	ZydisDecoder decoder;
 	ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64);
+	DWORD IsAppServerInstalled_idx = 0;
 
 	for (DWORD i = 0; i < FunctionTableSize; i++) {
 		if (!CDefPolicy_Query_addr && searchXref(&decoder, base, FunctionTable + i, CDefPolicy_Query))
@@ -490,8 +491,10 @@ void patch(HMODULE hMod)
 			IsSingleSessionPerUser_addr = backtrace(base, FunctionTable + i)->BeginAddress;
 		else if (!IsLicenseTypeLocalOnly_addr && searchXref(&decoder, base, FunctionTable + i, IsLicenseTypeLocalOnly))
 			IsLicenseTypeLocalOnly_addr = backtrace(base, FunctionTable + i)->BeginAddress;
-		else if (!IsAppServerInstalled_addr && searchXref(&decoder, base, FunctionTable + i, IsAppServerInstalled))
+		else if (!IsAppServerInstalled_addr && searchXref(&decoder, base, FunctionTable + i, IsAppServerInstalled)) {
 			IsAppServerInstalled_addr = backtrace(base, FunctionTable + i)->BeginAddress;
+			IsAppServerInstalled_idx = i;
+		}
 		else if (!GetConnectionProperty_addr && searchXref(&decoder, base, FunctionTable + i, GetConnectionProperty))
 			GetConnectionProperty_addr = backtrace(base, FunctionTable + i)->BeginAddress;
 		else if (!CSLQuery_Initialize_func && (bRemoteConnAllowed_xref = searchXref(&decoder, base, FunctionTable + i, bRemoteConnAllowed)))
@@ -506,15 +509,15 @@ void patch(HMODULE hMod)
 			SingleUserPatch(&decoder, IsSingleSessionPerUserEnabled_addr, base, memset_addr));
 		else if (IsSingleSessionPerUser_addr)
 			if (!SingleUserPatch(&decoder, IsSingleSessionPerUser_addr, base, memset_addr))
-				OutputDebugStringA("SingleUserPatch not found");
+				OutputDebugStringA("SingleUserPatch not found\n");
 	}
 
 	if (CDefPolicy_Query_addr)
 		DefPolicyPatch(&decoder, CDefPolicy_Query_addr, base);
-	else OutputDebugStringA("CDefPolicy_Query not found");
+	else OutputDebugStringA("CDefPolicy_Query not found\n");
 
 	if (!CSLQuery_Initialize_func) {
-		OutputDebugStringA("CSLQuery_Initialize not found");
+		OutputDebugStringA("CSLQuery_Initialize not found\n");
 		return;
 	}
 
@@ -527,17 +530,28 @@ void patch(HMODULE hMod)
 	{
 		if (IsLicenseTypeLocalOnly_addr)
 			LocalOnlyPatch(&decoder, GetInstanceOfTSLicense_addr, base, IsLicenseTypeLocalOnly_addr);
-		else OutputDebugStringA("IsLicenseTypeLocalOnly not found");
+		else OutputDebugStringA("IsLicenseTypeLocalOnly not found\n");
 	}
-	else OutputDebugStringA("GetInstanceOfTSLicense not found");
+	else OutputDebugStringA("GetInstanceOfTSLicense not found\n");
 
 	if (IsAllowNonRDPStack_addr)
 	{
-		if (IsAppServerInstalled_addr)
-			NonRDPPatch(&decoder, IsAllowNonRDPStack_addr, base, IsAppServerInstalled_addr);
-		else OutputDebugStringA("IsAppServerInstalled not found");
+		if (IsAppServerInstalled_addr) {
+			if (!NonRDPPatch(&decoder, IsAllowNonRDPStack_addr, base, IsAppServerInstalled_addr)) {
+				// CSLQuery::IsAppServerInstalled may be inlined, search all occurance
+				DWORD i = IsAppServerInstalled_idx;
+				for (; i < FunctionTableSize; i++) {
+					if (searchXref(&decoder, base, FunctionTable + i, IsAppServerInstalled) &&
+						NonRDPPatch(&decoder, IsAllowNonRDPStack_addr, base, backtrace(base, FunctionTable + i)->BeginAddress))
+						break;
+				}
+				if (i == FunctionTableSize)
+					OutputDebugStringA("NonRDPPatch not found\n");
+			}
+		}
+		else OutputDebugStringA("IsAppServerInstalled not found\n");
 	}
-	else OutputDebugStringA("IsAllowNonRDPStack not found");
+	else OutputDebugStringA("IsAllowNonRDPStack not found\n");
 
 	if (GetConnectionProperty_addr)
 	{
@@ -545,11 +559,11 @@ void patch(HMODULE hMod)
 		if (pnpDisabled != -1) {
 			auto PropertyDevice_addr = PropertyDeviceAddr(&decoder, GetConnectionProperty_addr, base, pnpDisabled);
 			if (PropertyDevice_addr != -1) PropertyDevicePatch(&decoder, PropertyDevice_addr, base);
-			else OutputDebugStringA("PropertyAddr not found");
+			else OutputDebugStringA("PropertyAddr not found\n");
 		}
-		else OutputDebugStringA("IS_PNP_DISABLED not found");
+		else OutputDebugStringA("IS_PNP_DISABLED not found\n");
 	}
-	else OutputDebugStringA("GetConnectionProperty not found");
+	else OutputDebugStringA("GetConnectionProperty not found\n");
 
 	auto bFUSEnabled = pattenMatch(base, rdata, AllowMultipleSessions, sizeof(AllowMultipleSessions));
 	auto bAppServerAllowed = pattenMatch(base, rdata, AllowAppServer, sizeof(AllowAppServer));
@@ -638,5 +652,5 @@ void patch(HMODULE hMod)
 		}
 	}
 	if (bInitialized_addr) *(DWORD*)bInitialized_addr = 1;
-	else OutputDebugStringA("bInitialized not found");
+	else OutputDebugStringA("bInitialized not found\n");
 }
