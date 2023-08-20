@@ -83,11 +83,14 @@ void patch(HMODULE hMod)
 	auto patched = false;
 
 	for (DWORD i = 0; i < FunctionTableSize; i++) {
-		if (searchPatch(&decoder, base, FunctionTable + i, PnpRedirectionAllowed))
+		if (searchPatch(&decoder, base, FunctionTable + i, PnpRedirectionAllowed)) {
+			OutputDebugStringA("patched PnpRedirectionAllowed\n");
 			patched = true;
-		if (searchPatch(&decoder, base, FunctionTable + i, CameraRedirectionAllowed))
+		}
+		if (searchPatch(&decoder, base, FunctionTable + i, CameraRedirectionAllowed)) {
+			OutputDebugStringA("patched CameraRedirectionAllowed\n");
 			patched = true;
-
+		}
 		if (patched) return;
 	}
 }

@@ -7,6 +7,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TermWrap", "TermWrap\TermWr
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UmWrap", "UmWrap\UmWrap.vcxproj", "{95973F9F-883B-4368-9107-75C41294C4D2}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TermWrapTest", "TermWrapTest\TermWrapTest.vcxproj", "{05C1252D-90EC-4170-A098-2942028E7AC2}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UmWrapTest", "UmWrapTest\UmWrapTest.vcxproj", "{F68E6973-0C77-42CF-94B5-6BC6053D4092}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +25,14 @@ Global
 		{95973F9F-883B-4368-9107-75C41294C4D2}.Debug|x64.Build.0 = Debug|x64
 		{95973F9F-883B-4368-9107-75C41294C4D2}.Release|x64.ActiveCfg = Release|x64
 		{95973F9F-883B-4368-9107-75C41294C4D2}.Release|x64.Build.0 = Release|x64
+		{05C1252D-90EC-4170-A098-2942028E7AC2}.Debug|x64.ActiveCfg = Debug|x64
+		{05C1252D-90EC-4170-A098-2942028E7AC2}.Debug|x64.Build.0 = Debug|x64
+		{05C1252D-90EC-4170-A098-2942028E7AC2}.Release|x64.ActiveCfg = Release|x64
+		{05C1252D-90EC-4170-A098-2942028E7AC2}.Release|x64.Build.0 = Release|x64
+		{F68E6973-0C77-42CF-94B5-6BC6053D4092}.Debug|x64.ActiveCfg = Debug|x64
+		{F68E6973-0C77-42CF-94B5-6BC6053D4092}.Debug|x64.Build.0 = Debug|x64
+		{F68E6973-0C77-42CF-94B5-6BC6053D4092}.Release|x64.ActiveCfg = Release|x64
+		{F68E6973-0C77-42CF-94B5-6BC6053D4092}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
