@@ -25,7 +25,16 @@ DWORD64 pattenMatch(DWORD64 base, PIMAGE_SECTION_HEADER pSection, const void* st
 	return -1;
 }
 
-bool searchPatch(ZydisDecoder* decoder, DWORD64 base, PRUNTIME_FUNCTION func, DWORD64 target)
+PIMAGE_IMPORT_DESCRIPTOR findImportImage(PIMAGE_IMPORT_DESCRIPTOR pImportDescriptor, DWORD64 base, LPCSTR str) {
+	while (pImportDescriptor->Name)
+	{
+		if (!lstrcmpiA((LPCSTR)(base + pImportDescriptor->Name), str)) return pImportDescriptor;
+		pImportDescriptor++;
+	}
+	return NULL;
+}
+
+bool searchPatch(ZydisDecoder* decoder, DWORD64 base, PRUNTIME_FUNCTION func, DWORD64 target, BOOL legacy)
 {
 	if (target == -1) return false;
 
@@ -48,8 +57,19 @@ bool searchPatch(ZydisDecoder* decoder, DWORD64 base, PRUNTIME_FUNCTION func, DW
 			while (ZYAN_SUCCESS(ZydisDecoderDecodeInstruction(decoder, (ZydisDecoderContext*)0, (void*)IP, length, &instruction))) {
 				if (instruction.mnemonic == ZYDIS_MNEMONIC_CALL && instruction.length == 5) {
 					size_t written = 0;
-					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB8\x01\x00\x00\x00", 5, &written);
-					return true;
+					if (!legacy) {
+						// mov eax, 1
+						WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB8\x01\x00\x00\x00", 5, &written);
+						return true;
+					}
+					else {
+						if (!ZYAN_SUCCESS(ZydisDecoderDecodeInstruction(decoder, (ZydisDecoderContext*)0, (void*)(IP + instruction.length), length, &instruction)) ||
+							instruction.mnemonic != ZYDIS_MNEMONIC_TEST || instruction.length != 2) continue;
+						// or dword ptr [rsp+0x40], 1
+						// xor eax, eax
+						WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\x83\x4C\x24\x40\x01\x31\xC0", 7, &written);
+						return true;
+					}
 				}
 				IP += instruction.length;
 				length -= instruction.length;
@@ -78,16 +98,22 @@ void patch(HMODULE hMod)
 	auto FunctionTableSize = pExceptionDirectory->Size / (DWORD)sizeof(RUNTIME_FUNCTION);
 	if (!FunctionTableSize) return;
 
+	auto legacy = false;
+	auto pImportDirectory = pNT->OptionalHeader.DataDirectory + IMAGE_DIRECTORY_ENTRY_IMPORT;
+	auto pImportDescriptor = (PIMAGE_IMPORT_DESCRIPTOR)(base + pImportDirectory->VirtualAddress);
+	if (findImportImage(pImportDescriptor, base, "slc.dll"))
+		legacy = true;
+
 	ZydisDecoder decoder;
 	ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64);
 	auto patched = false;
 
 	for (DWORD i = 0; i < FunctionTableSize; i++) {
-		if (searchPatch(&decoder, base, FunctionTable + i, PnpRedirectionAllowed)) {
+		if (searchPatch(&decoder, base, FunctionTable + i, PnpRedirectionAllowed, legacy)) {
 			OutputDebugStringA("patched PnpRedirectionAllowed\n");
 			patched = true;
 		}
-		if (searchPatch(&decoder, base, FunctionTable + i, CameraRedirectionAllowed)) {
+		if (searchPatch(&decoder, base, FunctionTable + i, CameraRedirectionAllowed, legacy)) {
 			OutputDebugStringA("patched CameraRedirectionAllowed\n");
 			patched = true;
 		}
