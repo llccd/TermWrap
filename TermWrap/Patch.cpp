@@ -273,12 +273,13 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 	OutputDebugStringA("DefPolicyPatch not found\n");
 }
 
-int SingleUserPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 target) {
-	ZyanUSize length = 128;
+int SingleUserPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 target, DWORD64 target2) {
+	ZyanUSize length = 256;
 	ZydisDecodedInstruction instruction;
 	ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 	auto IP = RVA + base;
 	target += base;
+	target2 += base;
 	size_t written = 0;
 
 	while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
@@ -313,6 +314,15 @@ int SingleUserPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 ta
 					operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER)
 				{
 					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\x90", 1, &written);
+					return 1;
+				}
+				else if (instruction.mnemonic == ZYDIS_MNEMONIC_CALL &&
+					instruction.length >= 5 && instruction.length <= 7 &&
+					operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+					operands[0].mem.base == ZYDIS_REGISTER_RIP &&
+					operands[0].mem.disp.value + IP + instruction.length == target2) {
+					// patch VerifyVersionInfoW instead if immediate value 1 is not found in assembly
+					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB8\x01\x00\x00\x00\x90\x90", instruction.length, &written);
 					return 1;
 				}
 				IP += instruction.length;
@@ -465,6 +475,11 @@ void patch(HMODULE hMod)
 	if (!pImportDescriptor) return;
 	auto memset_addr = findImportFunction(pImportDescriptor, base, "memset");
 
+	DWORD64 VerifyVersion_addr = -1;
+	pImportDescriptor = findImportImage(pImportDescriptor, base, "api-ms-win-core-kernel32-legacy-l1-1-1.dll");
+	if (!pImportDescriptor) pImportDescriptor = findImportImage(pImportDescriptor, base, "KERNEL32.dll");
+	if (pImportDescriptor) VerifyVersion_addr = findImportFunction(pImportDescriptor, base, "VerifyVersionInfoW");
+
 	auto pExceptionDirectory = pNT->OptionalHeader.DataDirectory + IMAGE_DIRECTORY_ENTRY_EXCEPTION;
 	auto FunctionTable = (PRUNTIME_FUNCTION)(base + pExceptionDirectory->VirtualAddress);
 	auto FunctionTableSize = pExceptionDirectory->Size / (DWORD)sizeof(RUNTIME_FUNCTION);
@@ -506,9 +521,9 @@ void patch(HMODULE hMod)
 	if (memset_addr)
 	{
 		if (IsSingleSessionPerUserEnabled_addr &&
-			SingleUserPatch(&decoder, IsSingleSessionPerUserEnabled_addr, base, memset_addr));
+			SingleUserPatch(&decoder, IsSingleSessionPerUserEnabled_addr, base, memset_addr, VerifyVersion_addr));
 		else if (IsSingleSessionPerUser_addr)
-			if (!SingleUserPatch(&decoder, IsSingleSessionPerUser_addr, base, memset_addr))
+			if (!SingleUserPatch(&decoder, IsSingleSessionPerUser_addr, base, memset_addr, VerifyVersion_addr))
 				OutputDebugStringA("SingleUserPatch not found\n");
 	}
 
@@ -538,7 +553,7 @@ void patch(HMODULE hMod)
 	{
 		if (IsAppServerInstalled_addr) {
 			if (!NonRDPPatch(&decoder, IsAllowNonRDPStack_addr, base, IsAppServerInstalled_addr)) {
-				// CSLQuery::IsAppServerInstalled may be inlined, search all occurance
+				// CSLQuery::IsAppServerInstalled may be inlined, search all occurrence
 				DWORD i = IsAppServerInstalled_idx;
 				for (; i < FunctionTableSize; i++) {
 					if (searchXref(&decoder, base, FunctionTable + i, IsAppServerInstalled) &&
