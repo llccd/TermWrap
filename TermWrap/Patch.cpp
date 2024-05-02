@@ -181,13 +181,17 @@ void LocalOnlyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 ta
 void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 	ZyanUSize length = 128;
 	ZyanUSize lastLength = 0;
+	ZyanUSize instLength;
 	ZydisDecodedInstruction instruction;
 	ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 	auto IP = RVA + base;
+	auto mov_base = ZYDIS_REGISTER_NONE;
+	auto mov_target = ZYDIS_REGISTER_NONE;
 	size_t written = 0;
 
 	while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 	{
+		instLength = instruction.length;
 		if (instruction.mnemonic == ZYDIS_MNEMONIC_CMP &&
 			operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
 			operands[0].mem.disp.value == 0x63c &&
@@ -196,8 +200,7 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 			auto reg1 = operands[1].reg.value;
 			auto reg2 = operands[0].mem.base;
 
-			length -= instruction.length;
-			if (!ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)(IP + instruction.length), length, &instruction, operands)))
+			if (!ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)(IP + instLength), length - instLength, &instruction, operands)))
 				break;
 
 			if (instruction.mnemonic == ZYDIS_MNEMONIC_JNZ)
@@ -233,14 +236,6 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 				WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xBA\x00\x01\x00\x00\x89\x91\x20\x03\x00\x00\x5E\x90", 13, &written);
 				return;
 			}
-			else if (reg1 == ZYDIS_REGISTER_EDI) {
-				if (operands[0].mem.base != ZYDIS_REGISTER_RCX) {
-					OutputDebugStringA("DefPolicyPatch: Unknown reg2\n");
-					return;
-				}
-				WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xBF\x00\x01\x00\x00\x89\xB9\x38\x06\x00\x00\x90\x90\x90", 14, &written);
-				return;
-			}
 			else if (reg1 != ZYDIS_REGISTER_EAX) {
 				OutputDebugStringA("DefPolicyPatch: Unknown reg1\n");
 				return;
@@ -265,10 +260,60 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 			}
 			return;
 		}
+		else if (!mov_base && instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
+			operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+			operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+			operands[1].mem.disp.value == 0x63c)
+		{
+			mov_base = operands[1].mem.base;
+			mov_target = operands[0].reg.value;
+		}
+		else if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
+			operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+			operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+			operands[1].mem.base == mov_base &&
+			operands[1].mem.disp.value == 0x638)
+		{
+			auto mov_target2 = operands[0].reg.value;
 
-		IP += instruction.length;
-		length -= instruction.length;
-		lastLength = instruction.length;
+			auto offset = instLength;
+			while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)(IP + offset), length - offset, &instruction, operands))) {
+				offset += instruction.length;
+				if (instruction.mnemonic == ZYDIS_MNEMONIC_CMP &&
+					operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+					operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+					(operands[0].reg.value == mov_target && operands[1].reg.value == mov_target2 ||
+						operands[0].reg.value == mov_target2 && operands[1].reg.value == mov_target))
+					break;
+			}
+
+			if (!ZYAN_SUCCESS(ZydisDecoderDecodeInstruction(decoder, (ZydisDecoderContext*)0, (void*)(IP + offset), length - offset, &instruction)))
+				break;
+
+			if (instruction.mnemonic == ZYDIS_MNEMONIC_JNZ)
+			{
+				IP -= lastLength;
+				OutputDebugStringA("DefPolicyPatch: Unknown _jmp\n");
+				return;
+			}
+			else if (instruction.mnemonic != ZYDIS_MNEMONIC_JZ && instruction.mnemonic != ZYDIS_MNEMONIC_POP)
+				break;
+
+			if (mov_target2 == ZYDIS_REGISTER_EDI) {
+				if (operands[1].mem.base == ZYDIS_REGISTER_RCX)
+					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xBF\x00\x01\x00\x00\x89\xB9\x38\x06\x00\x00\x90\x90\x90", 14, &written);
+				else
+					OutputDebugStringA("DefPolicyPatch: Unknown reg2\n");
+			}
+			else
+				OutputDebugStringA("DefPolicyPatch: Unknown reg1\n");
+
+			return;
+		}
+
+		IP += instLength;
+		length -= instLength;
+		lastLength = instLength;
 	}
 	OutputDebugStringA("DefPolicyPatch not found\n");
 }
