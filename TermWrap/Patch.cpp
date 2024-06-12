@@ -359,10 +359,12 @@ int SingleUserPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 ta
 					return 1;
 				}
 				else if (instruction.mnemonic == ZYDIS_MNEMONIC_CMP &&
-					instruction.length <= 4 && operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-					operands[0].mem.base == ZYDIS_REGISTER_RBP && operands[0].mem.disp.value == 0x7a) {
-					// cmp [rbp+0A0h+var_26], XX -> nop
-					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\x90\x90\x90\x90", instruction.length, &written);
+					instruction.length <= 8 && operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+					(operands[0].mem.base == ZYDIS_REGISTER_RBP || operands[0].mem.base == ZYDIS_REGISTER_RSP) &&
+					(operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE && operands[1].imm.value.u == 1 ||
+						operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER)) {
+					// cmp [rbp/rsp+XX], 1 -> nop
+					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\x90\x90\x90\x90\x90\x90\x90\x90", instruction.length, &written);
 					return 1;
 				}
 				IP += instruction.length;
@@ -537,14 +539,14 @@ void patch(HMODULE hMod)
 
 	auto pImportDirectory = pNT->OptionalHeader.DataDirectory + IMAGE_DIRECTORY_ENTRY_IMPORT;
 	auto pImportDescriptor = (PIMAGE_IMPORT_DESCRIPTOR)(base + pImportDirectory->VirtualAddress);
-	pImportDescriptor = findImportImage(pImportDescriptor, base, "msvcrt.dll");
-	if (!pImportDescriptor) return;
-	auto memset_addr = findImportFunction(pImportDescriptor, base, "memset");
+	auto pImportImage = findImportImage(pImportDescriptor, base, "msvcrt.dll");
+	if (!pImportImage) return;
+	auto memset_addr = findImportFunction(pImportImage, base, "memset");
 
 	DWORD64 VerifyVersion_addr = -1;
-	pImportDescriptor = findImportImage(pImportDescriptor, base, "api-ms-win-core-kernel32-legacy-l1-1-1.dll");
-	if (!pImportDescriptor) pImportDescriptor = findImportImage(pImportDescriptor, base, "KERNEL32.dll");
-	if (pImportDescriptor) VerifyVersion_addr = findImportFunction(pImportDescriptor, base, "VerifyVersionInfoW");
+	pImportImage = findImportImage(pImportDescriptor, base, "api-ms-win-core-kernel32-legacy-l1-1-1.dll");
+	if (!pImportImage) pImportImage = findImportImage(pImportDescriptor, base, "KERNEL32.dll");
+	if (pImportImage) VerifyVersion_addr = findImportFunction(pImportImage, base, "VerifyVersionInfoW");
 
 	auto pExceptionDirectory = pNT->OptionalHeader.DataDirectory + IMAGE_DIRECTORY_ENTRY_EXCEPTION;
 	auto FunctionTable = (PRUNTIME_FUNCTION)(base + pExceptionDirectory->VirtualAddress);
@@ -586,11 +588,13 @@ void patch(HMODULE hMod)
 
 	if (memset_addr)
 	{
-		if (IsSingleSessionPerUserEnabled_addr &&
-			SingleUserPatch(&decoder, IsSingleSessionPerUserEnabled_addr, base, memset_addr, VerifyVersion_addr));
-		else if (IsSingleSessionPerUser_addr)
-			if (!SingleUserPatch(&decoder, IsSingleSessionPerUser_addr, base, memset_addr, VerifyVersion_addr))
-				OutputDebugStringA("SingleUserPatch not found\n");
+		bool patched = false;
+		if (IsSingleSessionPerUserEnabled_addr && SingleUserPatch(&decoder, IsSingleSessionPerUserEnabled_addr, base, memset_addr, VerifyVersion_addr))
+			patched = true;
+		if (IsSingleSessionPerUser_addr && SingleUserPatch(&decoder, IsSingleSessionPerUser_addr, base, memset_addr, VerifyVersion_addr))
+			patched = true;
+		if (!patched)
+			OutputDebugStringA("SingleUserPatch not found\n");
 	}
 
 	if (CDefPolicy_Query_addr)
