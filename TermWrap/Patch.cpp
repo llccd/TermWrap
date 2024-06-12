@@ -348,26 +348,21 @@ int SingleUserPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWORD64 ta
 
 			while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
 			{
-				if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
-					operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
-					operands[1].imm.value.u == 1)
-				{
-					WriteProcessMemory(GetCurrentProcess(), (void*)(IP + instruction.raw.imm[0].offset), "\x00", 1, &written);
-					return 1;
-				}
-				else if (instruction.mnemonic == ZYDIS_MNEMONIC_INC &&
-					operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER)
-				{
-					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\x90", 1, &written);
-					return 1;
-				}
-				else if (instruction.mnemonic == ZYDIS_MNEMONIC_CALL &&
+				if (instruction.mnemonic == ZYDIS_MNEMONIC_CALL &&
 					instruction.length >= 5 && instruction.length <= 7 &&
 					operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
 					operands[0].mem.base == ZYDIS_REGISTER_RIP &&
 					operands[0].mem.disp.value + IP + instruction.length == target2) {
-					// patch VerifyVersionInfoW instead if immediate value 1 is not found in assembly
+					// call VerifyVersionInfoW -> mov eax, 1
 					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB8\x01\x00\x00\x00\x90\x90", instruction.length, &written);
+					if (instruction.length != 7) OutputDebugStringA("length != 7\n");
+					return 1;
+				}
+				else if (instruction.mnemonic == ZYDIS_MNEMONIC_CMP &&
+					instruction.length <= 4 && operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+					operands[0].mem.base == ZYDIS_REGISTER_RBP && operands[0].mem.disp.value == 0x7a) {
+					// cmp [rbp+0A0h+var_26], XX -> nop
+					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\x90\x90\x90\x90", instruction.length, &written);
 					return 1;
 				}
 				IP += instruction.length;
