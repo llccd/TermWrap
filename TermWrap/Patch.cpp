@@ -438,6 +438,32 @@ DWORD64 PropertyDeviceAddr(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base, DWO
 					return IP + operands[0].imm.value.u - base;
 			}
 		}
+		else if (instruction.mnemonic == ZYDIS_MNEMONIC_LEA &&
+			operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+			operands[0].reg.value == ZYDIS_REGISTER_RCX &&
+			operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+			(operands[1].mem.base == ZYDIS_REGISTER_RIP && target == IP + operands[1].mem.disp.value ||
+				operands[1].mem.segment == ZYDIS_REGISTER_DS && target == base + operands[1].mem.disp.value))
+		{
+			bool foundJNZ = false;
+			while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
+			{
+				IP += instruction.length;
+				length -= instruction.length;
+
+				if (!foundJNZ && instruction.mnemonic == ZYDIS_MNEMONIC_JNZ) {
+					IP += operands[0].imm.value.u;
+					foundJNZ = true;
+				}
+				
+				if (foundJNZ && instruction.mnemonic == ZYDIS_MNEMONIC_CALL &&
+					operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
+					operands[0].imm.is_relative == ZYAN_TRUE &&
+					operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+					operands[1].reg.value == ZYDIS_REGISTER_RIP)
+					return IP + operands[0].imm.value.u - base;
+			}
+		}
 	}
 	return -1;
 }
