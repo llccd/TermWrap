@@ -672,7 +672,7 @@ void patch(HMODULE hMod)
 			if (!found && instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
 				operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
 				operands[0].mem.base == ZYDIS_REGISTER_RIP &&
-				operands[0].mem.disp.has_displacement == ZYAN_TRUE &&
+				operands[0].mem.disp.size != 0 &&
 				operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
 				operands[1].reg.value == ZYDIS_REGISTER_EAX)
 			{
@@ -682,7 +682,7 @@ void patch(HMODULE hMod)
 			else if (instruction.mnemonic == ZYDIS_MNEMONIC_LEA &&
 				operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
 				operands[1].mem.base == ZYDIS_REGISTER_RIP &&
-				operands[1].mem.disp.has_displacement == ZYAN_TRUE &&
+				operands[1].mem.disp.size != 0 &&
 				operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
 				operands[0].reg.value == ZYDIS_REGISTER_RCX)
 			{
@@ -693,7 +693,7 @@ void patch(HMODULE hMod)
 			else if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
 				operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
 				operands[0].mem.base == ZYDIS_REGISTER_RIP &&
-				operands[0].mem.disp.has_displacement == ZYAN_TRUE &&
+				operands[0].mem.disp.size != 0 &&
 				operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE &&
 				operands[1].imm.value.u == 1) {
 				bInitialized_addr = operands[0].mem.disp.value + IP;
@@ -715,7 +715,7 @@ void patch(HMODULE hMod)
 			else if (!found && instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
 				operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
 				operands[0].mem.base == ZYDIS_REGISTER_RIP &&
-				operands[0].mem.disp.has_displacement == ZYAN_TRUE &&
+				operands[0].mem.disp.size != 0 &&
 				operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER)
 			{
 				found = true;
@@ -724,7 +724,7 @@ void patch(HMODULE hMod)
 			else if (instruction.mnemonic == ZYDIS_MNEMONIC_LEA &&
 				operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
 				operands[1].mem.base == ZYDIS_REGISTER_RIP &&
-				operands[1].mem.disp.has_displacement == ZYAN_TRUE &&
+				operands[1].mem.disp.size != 0 &&
 				operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
 				operands[0].reg.value == ZYDIS_REGISTER_RDX)
 			{
@@ -735,7 +735,7 @@ void patch(HMODULE hMod)
 			else if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
 				operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
 				operands[0].mem.base == ZYDIS_REGISTER_RIP &&
-				operands[0].mem.disp.has_displacement == ZYAN_TRUE &&
+				operands[0].mem.disp.size != 0 &&
 				operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
 				operands[1].reg.value == ZYDIS_REGISTER_EAX)
 				bInitialized_addr = operands[0].mem.disp.value + IP;
