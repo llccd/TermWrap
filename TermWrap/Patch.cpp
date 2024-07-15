@@ -664,7 +664,7 @@ void patch(HMODULE hMod)
 	auto found = false;
 	DWORD64 bInitialized_addr = 0;
 
-	if (length > 100)
+	if (length > 0x100)
 		while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(&decoder, (void*)IP, length, &instruction, operands)))
 		{
 			IP += instruction.length;
@@ -737,7 +737,8 @@ void patch(HMODULE hMod)
 				operands[0].mem.base == ZYDIS_REGISTER_RIP &&
 				operands[0].mem.disp.size != 0 &&
 				operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-				operands[1].reg.value == ZYDIS_REGISTER_EAX)
+				(operands[1].reg.value == ZYDIS_REGISTER_EAX ||
+					operands[1].reg.value == ZYDIS_REGISTER_ECX))
 				bInitialized_addr = operands[0].mem.disp.value + IP;
 			else if (instruction.mnemonic == ZYDIS_MNEMONIC_RET)
 				break;
