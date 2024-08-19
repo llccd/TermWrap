@@ -253,7 +253,7 @@ void DefPolicyPatch(ZydisDecoder* decoder, DWORD64 RVA, DWORD64 base) {
 				WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB8\x00\x01\x00\x00\x89\x81\x38\x06\x00\x00\x90", 12, &written);
 				break;
 			case ZYDIS_REGISTER_ECX:
-				WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB8\x00\x01\x00\x00\x89\x81\x20\x03\x00\x00\x90", 12, &written);
+				WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB8\x00\x01\x00\x00\x89\x81\x24\x03\x00\x00\x90", 12, &written);
 				break;
 			case ZYDIS_REGISTER_ESI:
 				WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB8\x00\x01\x00\x00\x89\x86\x20\x03\x00\x00\x90", 12, &written);
