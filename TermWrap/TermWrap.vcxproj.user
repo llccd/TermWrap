@@ -5,4 +5,9 @@
     <LocalDebuggerCommandArguments>$(TargetPath) , ServiceMain</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LocalDebuggerCommand>c:\windows\system32\rundll32.exe</LocalDebuggerCommand>
+    <LocalDebuggerCommandArguments>$(TargetPath) , ServiceMain</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
 </Project>

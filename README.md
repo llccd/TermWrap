@@ -4,13 +4,11 @@ My rewrite of [rdpwrap](https://github.com/stascorp/rdpwrap)
 
 ## Compared to original rdpwrap
 
-1. Only support x64-based systems starting from Vista
+1. Integrated [RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder), patch offsets are automatically searched, and will survive after installing updates
 
-2. Integrated [RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder), patch offsets are automatically searched, and will survive after installing updates
+2. Improved SingleUserPatch which patches all two possible locations 
 
-3. Improved SingleUserPatch which respects fSingleSessionPerUser registry setting
-
-4. Enabled camera and USB redirection for all SKUs by additional wrap of UmRdpService
+3. Enabled camera and USB redirection for all SKUs by additional wrap of UmRdpService
 
 ## Usage
 
@@ -18,7 +16,9 @@ My rewrite of [rdpwrap](https://github.com/stascorp/rdpwrap)
 
 First, ensure [Microsoft Visual C++ 2015-2022 Redistributable (x64)](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) is installed
 
-Copy 3 dlls to "%ProgramFiles%\RDP Wrapper\" and merge "Install.reg", then reboot system
+Copy the dlls for your architecture to "%ProgramFiles%\RDP Wrapper\" and merge "Install_termwrap_umwrap.reg" or "Install_termwrap_only.reg", then reboot system
+
+UmWrap is only needed on server and home editions, Professional/Enterprise editions already has the features enabled. Currently UmWrap only supports x64 system
 
 ### Uninstall
 

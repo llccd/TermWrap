@@ -4,28 +4,28 @@
 constexpr const WCHAR AllowPnp[] = L"TerminalServices-DeviceRedirection-Licenses-PnpRedirectionAllowed";
 constexpr const WCHAR AllowCamera[] = L"TerminalServices-DeviceRedirection-Licenses-CameraRedirectionAllowed";
 
-PIMAGE_SECTION_HEADER findSection(PIMAGE_NT_HEADERS64 pNT, const char* str)
+PIMAGE_SECTION_HEADER findSection(PIMAGE_NT_HEADERS pNT, const char* str)
 {
 	auto pSection = IMAGE_FIRST_SECTION(pNT);
 
-	for (DWORD64 i = 0; i < pNT->FileHeader.NumberOfSections; i++)
+	for (size_t i = 0; i < pNT->FileHeader.NumberOfSections; i++)
 		if (CSTR_EQUAL == CompareStringA(LOCALE_INVARIANT, 0, (char*)pSection[i].Name, -1, str, -1))
 			return pSection + i;
 
 	return NULL;
 }
 
-DWORD64 pattenMatch(DWORD64 base, PIMAGE_SECTION_HEADER pSection, const void* str, DWORD64 size)
+DWORD64 pattenMatch(size_t base, PIMAGE_SECTION_HEADER pSection, const void* str, size_t size)
 {
-	auto rdata = base + pSection->VirtualAddress;
+	size_t rdata = base + pSection->VirtualAddress;
 
-	for (DWORD64 i = 0; i < pSection->SizeOfRawData; i += 4)
+	for (size_t i = 0; i < pSection->SizeOfRawData; i += 4)
 		if (!memcmp((void*)(rdata + i), str, size)) return pSection->VirtualAddress + i;
 
 	return -1;
 }
 
-PIMAGE_IMPORT_DESCRIPTOR findImportImage(PIMAGE_IMPORT_DESCRIPTOR pImportDescriptor, DWORD64 base, LPCSTR str) {
+PIMAGE_IMPORT_DESCRIPTOR findImportImage(PIMAGE_IMPORT_DESCRIPTOR pImportDescriptor, size_t base, LPCSTR str) {
 	while (pImportDescriptor->Name)
 	{
 		if (!lstrcmpiA((LPCSTR)(base + pImportDescriptor->Name), str)) return pImportDescriptor;
@@ -86,7 +86,7 @@ void patch(HMODULE hMod)
 {
 	auto base = (size_t)hMod;
 	auto pDos = (PIMAGE_DOS_HEADER)base;
-	auto pNT = (PIMAGE_NT_HEADERS64)(base + pDos->e_lfanew);
+	auto pNT = (PIMAGE_NT_HEADERS)(base + pDos->e_lfanew);
 	auto rdata = findSection(pNT, ".rdata");
 	if (!rdata) rdata = findSection(pNT, ".text");
 

@@ -13,24 +13,38 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UmWrapTest", "UmWrapTest\Um
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
 		Debug|x64 = Debug|x64
+		Release|Win32 = Release|Win32
 		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C1C2FEB6-1830-4F66-89AB-13D9889295DA}.Debug|Win32.ActiveCfg = Debug|Win32
+		{C1C2FEB6-1830-4F66-89AB-13D9889295DA}.Debug|Win32.Build.0 = Debug|Win32
 		{C1C2FEB6-1830-4F66-89AB-13D9889295DA}.Debug|x64.ActiveCfg = Debug|x64
 		{C1C2FEB6-1830-4F66-89AB-13D9889295DA}.Debug|x64.Build.0 = Debug|x64
+		{C1C2FEB6-1830-4F66-89AB-13D9889295DA}.Release|Win32.ActiveCfg = Release|Win32
+		{C1C2FEB6-1830-4F66-89AB-13D9889295DA}.Release|Win32.Build.0 = Release|Win32
 		{C1C2FEB6-1830-4F66-89AB-13D9889295DA}.Release|x64.ActiveCfg = Release|x64
 		{C1C2FEB6-1830-4F66-89AB-13D9889295DA}.Release|x64.Build.0 = Release|x64
+		{95973F9F-883B-4368-9107-75C41294C4D2}.Debug|Win32.ActiveCfg = Debug|x64
 		{95973F9F-883B-4368-9107-75C41294C4D2}.Debug|x64.ActiveCfg = Debug|x64
 		{95973F9F-883B-4368-9107-75C41294C4D2}.Debug|x64.Build.0 = Debug|x64
+		{95973F9F-883B-4368-9107-75C41294C4D2}.Release|Win32.ActiveCfg = Release|x64
 		{95973F9F-883B-4368-9107-75C41294C4D2}.Release|x64.ActiveCfg = Release|x64
 		{95973F9F-883B-4368-9107-75C41294C4D2}.Release|x64.Build.0 = Release|x64
+		{05C1252D-90EC-4170-A098-2942028E7AC2}.Debug|Win32.ActiveCfg = Debug|Win32
+		{05C1252D-90EC-4170-A098-2942028E7AC2}.Debug|Win32.Build.0 = Debug|Win32
 		{05C1252D-90EC-4170-A098-2942028E7AC2}.Debug|x64.ActiveCfg = Debug|x64
 		{05C1252D-90EC-4170-A098-2942028E7AC2}.Debug|x64.Build.0 = Debug|x64
+		{05C1252D-90EC-4170-A098-2942028E7AC2}.Release|Win32.ActiveCfg = Release|Win32
+		{05C1252D-90EC-4170-A098-2942028E7AC2}.Release|Win32.Build.0 = Release|Win32
 		{05C1252D-90EC-4170-A098-2942028E7AC2}.Release|x64.ActiveCfg = Release|x64
 		{05C1252D-90EC-4170-A098-2942028E7AC2}.Release|x64.Build.0 = Release|x64
+		{F68E6973-0C77-42CF-94B5-6BC6053D4092}.Debug|Win32.ActiveCfg = Debug|x64
 		{F68E6973-0C77-42CF-94B5-6BC6053D4092}.Debug|x64.ActiveCfg = Debug|x64
 		{F68E6973-0C77-42CF-94B5-6BC6053D4092}.Debug|x64.Build.0 = Debug|x64
+		{F68E6973-0C77-42CF-94B5-6BC6053D4092}.Release|Win32.ActiveCfg = Release|x64
 		{F68E6973-0C77-42CF-94B5-6BC6053D4092}.Release|x64.ActiveCfg = Release|x64
 		{F68E6973-0C77-42CF-94B5-6BC6053D4092}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
