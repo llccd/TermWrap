@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TermWrapTest", "TermWrapTes
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UmWrapTest", "UmWrapTest\UmWrapTest.vcxproj", "{F68E6973-0C77-42CF-94B5-6BC6053D4092}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EndpWrap", "EndpWrap\EndpWrap.vcxproj", "{D9E80CFF-2B8F-4F8B-9421-5EAEE9839C6C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -47,6 +49,12 @@ Global
 		{F68E6973-0C77-42CF-94B5-6BC6053D4092}.Release|Win32.ActiveCfg = Release|x64
 		{F68E6973-0C77-42CF-94B5-6BC6053D4092}.Release|x64.ActiveCfg = Release|x64
 		{F68E6973-0C77-42CF-94B5-6BC6053D4092}.Release|x64.Build.0 = Release|x64
+		{D9E80CFF-2B8F-4F8B-9421-5EAEE9839C6C}.Debug|Win32.ActiveCfg = Debug|x64
+		{D9E80CFF-2B8F-4F8B-9421-5EAEE9839C6C}.Debug|x64.ActiveCfg = Debug|x64
+		{D9E80CFF-2B8F-4F8B-9421-5EAEE9839C6C}.Debug|x64.Build.0 = Debug|x64
+		{D9E80CFF-2B8F-4F8B-9421-5EAEE9839C6C}.Release|Win32.ActiveCfg = Release|x64
+		{D9E80CFF-2B8F-4F8B-9421-5EAEE9839C6C}.Release|x64.ActiveCfg = Release|x64
+		{D9E80CFF-2B8F-4F8B-9421-5EAEE9839C6C}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

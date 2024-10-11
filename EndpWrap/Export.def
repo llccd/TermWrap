@@ -1,0 +1,5 @@
+LIBRARY   EndpWrap
+EXPORTS
+   GetTSAudioEndpointEnumeratorForSession
+   DllGetClassObject   PRIVATE
+   DllCanUnloadNow     PRIVATE
