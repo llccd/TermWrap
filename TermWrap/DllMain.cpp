@@ -4,6 +4,7 @@
 typedef VOID(WINAPI* SERVICEMAIN)(DWORD, LPTSTR*);
 typedef VOID(WINAPI* SVCHOSTPUSHSERVICEGLOBALS)(VOID*);
 
+HMODULE hMod;
 SERVICEMAIN _ServiceMain;
 SVCHOSTPUSHSERVICEGLOBALS _SvchostPushServiceGlobals;
 
@@ -50,7 +51,7 @@ void WINAPI SvchostPushServiceGlobals(void* lpGlobalData)
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
 {
 	if (fdwReason == DLL_PROCESS_ATTACH) {
-		auto hMod = LoadLibraryExW(L"termsrv.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+		hMod = LoadLibraryExW(L"termsrv.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
 		if (!hMod) return false;
 
 		_ServiceMain = (SERVICEMAIN)GetProcAddress(hMod, "ServiceMain");
@@ -60,5 +61,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
 		patch(hMod);
 		SetThreadsState(true);
 	}
+	else if (fdwReason == DLL_PROCESS_DETACH)
+		FreeLibrary(hMod);
 	return true;
 }
