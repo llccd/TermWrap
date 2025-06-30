@@ -642,6 +642,33 @@ void PropertyDevicePatch(ZydisDecoder* decoder, size_t RVA, size_t base) {
 				}
 				IP += instruction.length;
 				length -= instruction.length;
+				if (instruction.mnemonic == ZYDIS_MNEMONIC_JNZ || instruction.mnemonic == ZYDIS_MNEMONIC_JZ)
+				{
+					auto target = IP + (size_t)operands[0].imm.value.u;
+					if (!ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)target, length, &instruction, operands)) ||
+						instruction.mnemonic != ZYDIS_MNEMONIC_SHR || operands[0].type != ZYDIS_OPERAND_TYPE_REGISTER ||
+						operands[0].reg.value != reg || operands[1].type != ZYDIS_OPERAND_TYPE_IMMEDIATE ||
+						operands[1].imm.value.u != 0x0c) continue;
+					if (!ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)(target + instruction.length), length, &instruction, operands)) ||
+						instruction.mnemonic != ZYDIS_MNEMONIC_AND || operands[0].type != ZYDIS_OPERAND_TYPE_REGISTER ||
+						operands[0].reg.value != reg || operands[1].type != ZYDIS_OPERAND_TYPE_IMMEDIATE ||
+						operands[1].imm.value.u != 7) break;
+
+					switch (reg) {
+					case ZYDIS_REGISTER_EAX:
+						WriteProcessMemory(GetCurrentProcess(), (void*)target, "\xB8\x07\x00\x00\x00\x90", 3 + instruction.length, &written);
+						break;
+					case ZYDIS_REGISTER_ECX:
+						WriteProcessMemory(GetCurrentProcess(), (void*)target, "\xB9\x07\x00\x00\x00\x90", 3 + instruction.length, &written);
+						break;
+					case ZYDIS_REGISTER_ESI:
+						WriteProcessMemory(GetCurrentProcess(), (void*)target, "\xBE\x07\x00\x00\x00\x90", 3 + instruction.length, &written);
+						break;
+					default:
+						OutputDebugStringA("PropertyPatch: Unknown reg\n");
+						break;
+					}
+				}
 			}
 			break;
 		}
