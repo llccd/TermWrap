@@ -142,6 +142,22 @@ PRUNTIME_FUNCTION backtrace(DWORD64 base, PRUNTIME_FUNCTION func) {
 }
 #endif
 
+DWORD readSetting(LPCSTR name, DWORD val) {
+	HKEY hKey;
+	DWORD data;
+	if (!RegOpenKeyExA(HKEY_LOCAL_MACHINE, "System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp", 0, KEY_READ, &hKey)) {
+		DWORD cbData = 4;
+		if (!RegQueryValueExA(hKey, name, NULL, NULL, (LPBYTE)&data, &cbData)) val = data;
+		RegCloseKey(hKey);
+	}
+	if (!RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\Policies\\Microsoft\\Windows NT\\Terminal Services", 0, KEY_READ, &hKey)) {
+		DWORD cbData = 4;
+		if (!RegQueryValueExA(hKey, name, NULL, NULL, (LPBYTE)&data, &cbData)) val = data;
+		RegCloseKey(hKey);
+	}
+	return val;
+}
+
 PIMAGE_SECTION_HEADER findSection(PIMAGE_NT_HEADERS pNT, const char* str)
 {
 	auto pSection = IMAGE_FIRST_SECTION(pNT);
@@ -624,6 +640,7 @@ void PropertyDevicePatch(ZydisDecoder* decoder, size_t RVA, size_t base) {
 						instruction.mnemonic != ZYDIS_MNEMONIC_AND || operands[0].type != ZYDIS_OPERAND_TYPE_REGISTER ||
 						operands[0].reg.value != reg || instruction.length > 3) break;
 
+					if (readSetting("fDisablePNPRedir", 0) == 1) return;
 					switch (reg) {
 					case ZYDIS_REGISTER_EAX:
 						WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB8\x00\x00\x00\x00\x90", 3 + instruction.length, &written);
@@ -654,15 +671,19 @@ void PropertyDevicePatch(ZydisDecoder* decoder, size_t RVA, size_t base) {
 						operands[0].reg.value != reg || operands[1].type != ZYDIS_OPERAND_TYPE_IMMEDIATE ||
 						operands[1].imm.value.u != 7) break;
 
+					char buf[] = "\xB8\x03\x00\x00\x00\x90";
+					if (readSetting("UseUniversalPrinterDriverFirst", 3) == 4) buf[1] = 4;
 					switch (reg) {
 					case ZYDIS_REGISTER_EAX:
-						WriteProcessMemory(GetCurrentProcess(), (void*)target, "\xB8\x07\x00\x00\x00\x90", 3 + instruction.length, &written);
+						WriteProcessMemory(GetCurrentProcess(), (void*)target, buf, 3 + instruction.length, &written);
 						break;
 					case ZYDIS_REGISTER_ECX:
-						WriteProcessMemory(GetCurrentProcess(), (void*)target, "\xB9\x07\x00\x00\x00\x90", 3 + instruction.length, &written);
+						buf[0] = (char)0xb9;
+						WriteProcessMemory(GetCurrentProcess(), (void*)target, buf, 3 + instruction.length, &written);
 						break;
 					case ZYDIS_REGISTER_ESI:
-						WriteProcessMemory(GetCurrentProcess(), (void*)target, "\xBE\x07\x00\x00\x00\x90", 3 + instruction.length, &written);
+						buf[0] = (char)0xbe;
+						WriteProcessMemory(GetCurrentProcess(), (void*)target, buf, 3 + instruction.length, &written);
 						break;
 					default:
 						OutputDebugStringA("PropertyPatch: Unknown reg\n");
