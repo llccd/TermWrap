@@ -719,7 +719,8 @@ void patch(HMODULE hMod)
 
 	auto pImportDirectory = pNT->OptionalHeader.DataDirectory + IMAGE_DIRECTORY_ENTRY_IMPORT;
 	auto pImportDescriptor = (PIMAGE_IMPORT_DESCRIPTOR)(base + pImportDirectory->VirtualAddress);
-	auto pImportImage = findImportImage(pImportDescriptor, base, "msvcrt.dll");
+	auto pImportImage = findImportImage(pImportDescriptor, base, "api-ms-win-crt-string-l1-1-0.dll");
+	if (!pImportImage) pImportImage = findImportImage(pImportDescriptor, base, "msvcrt.dll");
 	if (!pImportImage) return;
 	auto memset_addr = findImportFunction(pImportImage, base, "memset");
 
