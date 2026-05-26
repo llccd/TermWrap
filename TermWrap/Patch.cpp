@@ -18,71 +18,149 @@ constexpr const WCHAR AllowMultimon[] = L"TerminalServices-RemoteConnectionManag
 
 #ifndef _WIN64
 #define REG_IP ZYDIS_REGISTER_EIP
-#include <queue>
-#include <forward_list>
+typedef struct range_node {
+	size_t start;
+	size_t end;
+	struct range_node *next;
+} range_node, *range;
 
-class range {
-private:
-	std::forward_list<std::pair<size_t, size_t>> list;
-public:
-	bool in_range(size_t val) {
-		for (auto& p : list) {
-			if (val < p.first) return false;
-			if (val < p.second) return true;
-		}
-		return false;
+static void range_clear(range &r) {
+	range_node *n = r;
+	while (n) {
+		range_node *next = n->next;
+		free(n);
+		n = next;
 	}
-	size_t next_val(size_t val) {
-		for (auto& p : list) {
-			if (val < p.first) break;
-			if (val < p.second) {
-				val = p.second;
-				break;
+	r = NULL;
+}
+
+static int range_in_range(range n, size_t val) {
+	while (n) {
+		if (val < n->start) return 0;
+		if (val < n->end) return 1;
+		n = n->next;
+	}
+	return 0;
+}
+
+static size_t range_next_val(range n, size_t val) {
+	while (n) {
+		if (val < n->start) break;
+		if (val < n->end) {
+			val = n->end;
+			break;
+		}
+		n = n->next;
+	}
+	return val;
+}
+
+static void range_add(range &r, size_t start, size_t end) {
+	range_node *prev = r;
+	if (!prev || end < prev->start) {
+		range_node *n = (range_node *)malloc(sizeof(range_node));
+		if (!n) ExitProcess(-7);
+		n->start = start;
+		n->end = end;
+		n->next = r;
+		r = n;
+		return;
+	}
+	if (end <= prev->end) {
+		if (start < prev->start) prev->start = start;
+		return;
+	}
+	range_node *cur = prev->next;
+	while (cur) {
+		if (end < cur->start) {
+			if (start > prev->end) {
+				range_node *n = (range_node *)malloc(sizeof(range_node));
+				if (!n) ExitProcess(-7);
+				n->start = start;
+				n->end = end;
+				n->next = cur;
+				prev->next = n;
+			} else {
+				prev->end = end;
 			}
-		}
-		return val;
-	}
-	void clear() {
-		list.clear();
-	}
-	bool empty() {
-		return list.empty();
-	}
-	void add(size_t start, size_t end) {
-		auto p = std::make_pair(start, end);
-		auto it = list.begin();
-		auto prev = &*it;
-		if (list.empty() || end < prev->first) {
-			list.emplace_front(p);
 			return;
 		}
-		if (end <= prev->second) {
-			if (start < prev->first) prev->first = start;
+		if (end <= cur->end) {
+			if (start < cur->start)
+				if (start > prev->end) cur->start = start;
+				else {
+					prev->end = cur->end;
+					prev->next = cur->next;
+					free(cur);
+				}
 			return;
 		}
-		while (next(it) != list.end()) {
-			auto& i = *next(it);
-			if (end < i.first) {
-				if (start > prev->second) list.emplace_after(it, p);
-				else prev->second = end;
-				return;
-			}
-			if (end <= i.second) {
-				if (start < i.first)
-					if (start > prev->second) i.first = start;
-					else {
-						prev->second = i.second;
-						list.erase_after(it);
-					}
-				return;
-			}
-			prev = &i;
-			it++;
-		}
-		if (start > prev->second) list.emplace_after(it, p);
-		else if (start >= prev->first && end > prev->second) prev->second = end;
+		prev = cur;
+		cur = cur->next;
 	}
-};
+	if (start > prev->end) {
+		range_node *n = (range_node *)malloc(sizeof(range_node));
+		if (!n) ExitProcess(-7);
+		n->start = start;
+		n->end = end;
+		n->next = NULL;
+		prev->next = n;
+	} else if (start >= prev->start && end > prev->end) {
+		prev->end = end;
+	}
+}
+
+typedef struct {
+	size_t *data;
+	size_t size;
+	size_t capacity;
+} min_heap;
+
+static void min_heap_push(min_heap *h, size_t val) {
+	if (h->size >= h->capacity) {
+		size_t new_cap = h->capacity == 0 ? 8 : h->capacity * 2;
+		h->data = (size_t *)realloc(h->data, new_cap * sizeof(size_t));
+		if (!h->data) ExitProcess(-7);
+		h->capacity = new_cap;
+	}
+	h->data[h->size++] = val;
+	size_t i = h->size - 1;
+	while (i > 0) {
+		size_t parent = (i - 1) / 2;
+		if (h->data[parent] <= h->data[i]) break;
+		size_t tmp = h->data[parent];
+		h->data[parent] = h->data[i];
+		h->data[i] = tmp;
+		i = parent;
+	}
+}
+
+static void min_heap_pop(min_heap *h) {
+	h->size--;
+	if (h->size > 0) {
+		h->data[0] = h->data[h->size];
+		size_t i = 0;
+		while (1) {
+			size_t smallest = i;
+			size_t left = 2 * i + 1;
+			size_t right = 2 * i + 2;
+			if (left < h->size && h->data[left] < h->data[smallest]) smallest = left;
+			if (right < h->size && h->data[right] < h->data[smallest]) smallest = right;
+			if (smallest == i) break;
+			size_t tmp = h->data[smallest];
+			h->data[smallest] = h->data[i];
+			h->data[i] = tmp;
+			i = smallest;
+		}
+	}
+}
+
+static void min_heap_free(min_heap *h) {
+	free(h->data);
+	h->data = NULL;
+	h->size = 0;
+	h->capacity = 0;
+}
 #else
 #define REG_IP ZYDIS_REGISTER_RIP
 
@@ -219,9 +297,9 @@ void LocalOnlyPatch(ZydisDecoder* decoder, size_t RVA, size_t base, size_t targe
 			target == IP + operands[0].imm.value.u)
 		{   
 			while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)) && instruction.mnemonic == ZYDIS_MNEMONIC_MOV) {
-                IP += instruction.length;
-                length -= instruction.length;
-            }
+				IP += instruction.length;
+				length -= instruction.length;
+			}
 			if (!ZYAN_SUCCESS(ZydisDecoderDecodeInstruction(decoder, (ZydisDecoderContext*)0, (void*)IP, length, &instruction)) ||
 				instruction.mnemonic != ZYDIS_MNEMONIC_TEST) break;
 
@@ -749,20 +827,20 @@ void patch(HMODULE hMod)
 
 #ifndef _WIN64
 	ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_COMPAT_32, ZYDIS_STACK_WIDTH_32);
-	range visited;
-	std::priority_queue<size_t, std::vector<size_t>, std::greater<size_t>> jmpAddr;
+	range visited = NULL;
+	min_heap jmpAddr = {};
 
 	IP = base + text->VirtualAddress;
 	length = text->SizeOfRawData;
 
 	while (length >= 5)
 		if (!memcmp((void*)IP, "\x8B\xFF\x55\x8B\xEC", 5)) {
-			jmpAddr.push(IP);
+			min_heap_push(&jmpAddr, IP);
 
-			while (!jmpAddr.empty()) {
-				auto addr = jmpAddr.top();
-				jmpAddr.pop();
-				if (visited.in_range(addr)) continue;
+			while (jmpAddr.size) {
+				auto addr = jmpAddr.data[0];
+				min_heap_pop(&jmpAddr);
+				if (range_in_range(visited, addr)) continue;
 
 				auto j = addr;
 				ZyanUSize l = text->SizeOfRawData - (j - base);
@@ -794,7 +872,7 @@ void patch(HMODULE hMod)
 						IsLicenseTypeLocalOnly_addr = IP - base;
 					else if (!IsAppServerInstalled_addr && target == IsAppServerInstalled) {
 						IsAppServerInstalled_addr = IP - base;
-						IsAppServerInstalled_idx = visited.next_val(IP);
+						IsAppServerInstalled_idx = range_next_val(visited, IP);
 					}
 					else if (!GetConnectionProperty_addr && target == GetConnectionProperty)
 						GetConnectionProperty_addr = IP - base;
@@ -803,8 +881,8 @@ void patch(HMODULE hMod)
 						CSLQuery_Initialize_addr = IP - base;
 					}
 					else goto nxt;
-					if (visited.empty()) visited.add(addr, j);
-					while (!jmpAddr.empty()) jmpAddr.pop();
+					if (!visited) range_add(visited, addr, j);
+					jmpAddr.size = 0;
 					if (CDefPolicy_Query_addr && GetInstanceOfTSLicense_addr && IsSingleSessionPerUserEnabled_addr && (IsAllowNonRDPStack_addr || IsAllowNonRDPStack == -1) &&
 						IsSingleSessionPerUser_addr && IsLicenseTypeLocalOnly_addr && CSLQuery_Initialize_addr && GetConnectionProperty_addr) goto fin;
 					goto out;
@@ -817,17 +895,17 @@ void patch(HMODULE hMod)
 						operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
 						operands[1].reg.value == ZYDIS_REGISTER_EIP) {
 						size_t offset = j + (size_t)operands[0].imm.value.u;
-						if ((offset < addr || offset > j) && !visited.in_range(offset)) jmpAddr.push(offset);
+						if ((offset < addr || offset > j) && !range_in_range(visited, offset)) min_heap_push(&jmpAddr, offset);
 					}
 					if (instruction.mnemonic == ZYDIS_MNEMONIC_RET || instruction.mnemonic == ZYDIS_MNEMONIC_JMP) {
-						visited.add(addr, j);
+						range_add(visited, addr, j);
 						break;
 					}
 				}
 			}
 		out:
-			auto nxt = visited.next_val(IP);
-			visited.clear();
+			auto nxt = range_next_val(visited, IP);
+			range_clear(visited);
 			length -= nxt - IP;
 			IP = nxt;
 		}
@@ -835,7 +913,9 @@ void patch(HMODULE hMod)
 			IP++;
 			length--;
 		}
-fin:;
+fin:
+	min_heap_free(&jmpAddr);
+	range_clear(visited);
 #else
 	auto pExceptionDirectory = pNT->OptionalHeader.DataDirectory + IMAGE_DIRECTORY_ENTRY_EXCEPTION;
 	auto FunctionTable = (PRUNTIME_FUNCTION)(base + pExceptionDirectory->VirtualAddress);
@@ -909,18 +989,17 @@ fin:;
 			if (!NonRDPPatch(&decoder, IsAllowNonRDPStack_addr, base, IsAppServerInstalled_addr)) {
 				// CSLQuery::IsAppServerInstalled may be inlined, search all occurrence
 #ifndef _WIN64
-			visited.clear();
 			IP = base + IsAppServerInstalled_idx;
 			length = text->SizeOfRawData - (IsAppServerInstalled_idx - base);
 
 			while (length >= 5)
 				if (!memcmp((void*)IP, "\x8B\xFF\x55\x8B\xEC", 5)) {
-					jmpAddr.push(IP);
+					min_heap_push(&jmpAddr, IP);
 
-					while (!jmpAddr.empty()) {
-						auto addr = jmpAddr.top();
-						jmpAddr.pop();
-						if (visited.in_range(addr)) continue;
+					while (jmpAddr.size) {
+						auto addr = jmpAddr.data[0];
+						min_heap_pop(&jmpAddr);
+						if (range_in_range(visited, addr)) continue;
 
 						auto j = addr;
 						ZyanUSize l = text->SizeOfRawData - (j - base);
@@ -944,16 +1023,16 @@ fin:;
 								operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
 								operands[1].reg.value == ZYDIS_REGISTER_EIP) {
 								size_t offset = j + (size_t)operands[0].imm.value.u;
-								if ((offset < addr || offset > j) && !visited.in_range(offset)) jmpAddr.push(offset);
+								if ((offset < addr || offset > j) && !range_in_range(visited, offset)) min_heap_push(&jmpAddr, offset);
 							}
 							if (instruction.mnemonic == ZYDIS_MNEMONIC_RET || instruction.mnemonic == ZYDIS_MNEMONIC_JMP) {
-								visited.add(addr, j);
+								range_add(visited, addr, j);
 								break;
 							}
 						}
 					}
-					auto nxt = visited.next_val(IP);
-					visited.clear();
+					auto nxt = range_next_val(visited, IP);
+					range_clear(visited);
 					length -= nxt - IP;
 					IP = nxt;
 				}
@@ -961,7 +1040,9 @@ fin:;
 					IP++;
 					length--;
 				}
-fin2:;
+fin2:
+			min_heap_free(&jmpAddr);
+			range_clear(visited);
 #else
 				DWORD i = IsAppServerInstalled_idx;
 				for (; i < FunctionTableSize; i++) {
