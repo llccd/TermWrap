@@ -356,6 +356,8 @@ void DefPolicyPatch(ZydisDecoder* decoder, size_t RVA, size_t base) {
 	auto IP = RVA + base;
 	auto mov_base = ZYDIS_REGISTER_NONE;
 	auto mov_target = ZYDIS_REGISTER_NONE;
+	auto mov_base2 = ZYDIS_REGISTER_NONE;
+	auto mov_target2 = ZYDIS_REGISTER_NONE;
 	SIZE_T written = 0;
 
 	while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)IP, length, &instruction, operands)))
@@ -363,6 +365,41 @@ void DefPolicyPatch(ZydisDecoder* decoder, size_t RVA, size_t base) {
 		instLength = instruction.length;
 		if (instruction.mnemonic == ZYDIS_MNEMONIC_CMP) {
 #ifdef _WIN64
+			if (mov_base && mov_base == mov_base2 &&
+				operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+				operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+				(operands[0].reg.value == mov_target && operands[1].reg.value == mov_target2 ||
+				operands[0].reg.value == mov_target2 && operands[1].reg.value == mov_target))
+			{
+				if (!ZYAN_SUCCESS(ZydisDecoderDecodeInstruction(decoder, (ZydisDecoderContext*)0, (void*)(IP + instLength), length - instLength, &instruction)))
+					break;
+
+				if (instruction.mnemonic == ZYDIS_MNEMONIC_JNZ)
+				{
+					if (lastLength == 7) {
+						if (mov_base == ZYDIS_REGISTER_RDI)
+							WriteProcessMemory(GetCurrentProcess(), (void*)(IP - lastLength), "\xC7\x87\x38\x06\x00\x00\x00\x01\x00\x00\xEB", 11, &written);
+						else
+							OutputDebugStringA("DefPolicyPatch: Unknown reg2\n");
+					}
+					else
+						OutputDebugStringA("DefPolicyPatch: Unknown _jmp\n");
+					return;
+				}
+				else if (instruction.mnemonic != ZYDIS_MNEMONIC_JZ && instruction.mnemonic != ZYDIS_MNEMONIC_POP)
+					break;
+
+				if (mov_target2 == ZYDIS_REGISTER_EDI) {
+					if (mov_base == ZYDIS_REGISTER_RCX)
+						WriteProcessMemory(GetCurrentProcess(), (void*)(IP - lastLength), "\xBF\x00\x01\x00\x00\x89\xB9\x38\x06\x00\x00\x90\x90\x90", 14, &written);
+					else
+						OutputDebugStringA("DefPolicyPatch: Unknown reg2\n");
+				}
+				else
+					OutputDebugStringA("DefPolicyPatch: Unknown reg1\n");
+
+				return;
+			}
 			if (operands[0].type != ZYDIS_OPERAND_TYPE_MEMORY ||
 				operands[0].mem.disp.value != 0x63c ||
 				operands[1].type != ZYDIS_OPERAND_TYPE_REGISTER) goto out;
@@ -455,52 +492,10 @@ void DefPolicyPatch(ZydisDecoder* decoder, size_t RVA, size_t base) {
 		else if (instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
 			operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
 			operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-			operands[1].mem.base == mov_base &&
 			operands[1].mem.disp.value == 0x638)
 		{
-			auto mov_target2 = operands[0].reg.value;
-
-			auto offset = instLength;
-			while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(decoder, (void*)(IP + offset), length - offset, &instruction, operands))) {
-				offset += instruction.length;
-				if (instruction.mnemonic == ZYDIS_MNEMONIC_CMP &&
-					operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-					operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-					(operands[0].reg.value == mov_target && operands[1].reg.value == mov_target2 ||
-						operands[0].reg.value == mov_target2 && operands[1].reg.value == mov_target))
-					break;
-			}
-
-			if (!ZYAN_SUCCESS(ZydisDecoderDecodeInstruction(decoder, (ZydisDecoderContext*)0, (void*)(IP + offset), length - offset, &instruction)))
-				break;
-
-			if (instruction.mnemonic == ZYDIS_MNEMONIC_JNZ)
-			{
-				if (instLength == 7) {
-					if (mov_base == ZYDIS_REGISTER_RDI)
-						WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xC7\x87\x38\x06\x00\x00\x00\x01\x00\x00\xEB", 11, &written);
-					else
-						OutputDebugStringA("DefPolicyPatch: Unknown reg2\n");
-				}
-				else {
-					IP -= lastLength;
-					OutputDebugStringA("DefPolicyPatch: Unknown _jmp\n");
-				}
-				return;
-			}
-			else if (instruction.mnemonic != ZYDIS_MNEMONIC_JZ && instruction.mnemonic != ZYDIS_MNEMONIC_POP)
-				break;
-
-			if (mov_target2 == ZYDIS_REGISTER_EDI) {
-				if (mov_base == ZYDIS_REGISTER_RCX)
-					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xBF\x00\x01\x00\x00\x89\xB9\x38\x06\x00\x00\x90\x90\x90", 14, &written);
-				else
-					OutputDebugStringA("DefPolicyPatch: Unknown reg2\n");
-			}
-			else
-				OutputDebugStringA("DefPolicyPatch: Unknown reg1\n");
-
-			return;
+			mov_base2 = operands[1].mem.base;
+			mov_target2 = operands[0].reg.value;
 		}
 #endif
 	out:
@@ -575,7 +570,6 @@ int SingleUserPatch(ZydisDecoder* decoder, size_t RVA, size_t base, size_t targe
 					operands[0].mem.disp.value + IP + instruction.length == target2) {
 					// call VerifyVersionInfoW -> mov eax, 1
 					WriteProcessMemory(GetCurrentProcess(), (void*)IP, "\xB8\x01\x00\x00\x00\x90\x90", instruction.length, &written);
-					if (instruction.length != 7) OutputDebugStringA("length != 7\n");
 					return 1;
 				}
 				if (instruction.mnemonic == ZYDIS_MNEMONIC_CMP &&
