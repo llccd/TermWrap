@@ -6,17 +6,19 @@ My rewrite of [rdpwrap](https://github.com/stascorp/rdpwrap)
 
 1. Integrated [RDPWrapOffsetFinder](https://github.com/llccd/RDPWrapOffsetFinder), patch offsets are automatically searched, and will survive after installing updates
 
-2. Improved SingleUserPatch which patches all two possible locations 
+2. Improved SingleUserPatch which patches all two possible locations
 
 3. Enabled camera and USB redirection for all SKUs by additional wrap of UmRdpService
 
 4. Enabled audio recording redirection for all SKUs by additional wrap of rdpendp.dll
 
+5. Experimental ARM64 support (no USB redirection for now)
+
 ## Usage
 
 ### Install
 
-First, ensure [Microsoft Visual C++ 2015-2022 Redistributable (x64)](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) is installed
+First, ensure [Visual C++ v14 Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) is installed
 
 Copy the dlls for your architecture to "%ProgramFiles%\RDP Wrapper\" and merge "Install_termwrap_umwrap.reg" or "Install_termwrap_only.reg", then reboot system
 
@@ -40,6 +42,6 @@ To enable remote desktop USB redirection, additional group policy settings are r
 
 Just like UmWrap, EndpWrap is only needed on server and home editions. It gets loaded in all applications that play/record remote audio, and may cause some tricky applications to stuck or crash.
 
-To enable audio recording redirection, both `EndpWrap.dll` and `Zydis.dll` needs to be copied to the system32 folder. After that, change the following registry entry from `rdpendp.dll` to `EndpWrap.dll`:
+To enable audio recording redirection, both the x64 `EndpWrap.dll` and `Zydis.dll` need to be copied to the system32 folder. The x86 `EndpWrap.dll` and `Zydis.dll` also need to be copied to the syswow64 folder. After that, change the following registry entry from `rdpendp.dll` to `EndpWrap.dll`:
 
 `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp\AudioEnumeratorDll`

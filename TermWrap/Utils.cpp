@@ -1,7 +1,7 @@
 #include <windows.h>
-#include <Zydis/Zydis.h>
 
 #ifndef _WIN64
+#include <Zydis/Zydis.h>
 #define REG_IP ZYDIS_REGISTER_EIP
 typedef struct range_node {
 	size_t start;
@@ -146,7 +146,10 @@ static void min_heap_free(min_heap *h) {
 	h->size = 0;
 	h->capacity = 0;
 }
-#else
+#endif
+
+#ifdef _AMD64_
+#include <Zydis/Zydis.h>
 #define REG_IP ZYDIS_REGISTER_RIP
 
 typedef union _UNWIND_CODE {
@@ -168,7 +171,7 @@ typedef struct _UNWIND_INFO {
 	UNWIND_CODE UnwindCode[1];
 } UNWIND_INFO, * PUNWIND_INFO;
 
-static DWORD64 searchXref(ZydisDecoder* decoder, DWORD64 base, PRUNTIME_FUNCTION func, DWORD64 target)
+static DWORD64 searchXref(ZydisDecoder* decoder, DWORD64 base, PIMAGE_AMD64_RUNTIME_FUNCTION_ENTRY func, DWORD64 target)
 {
 	auto IP = base + func->BeginAddress;
 	auto length = (ZyanUSize)func->EndAddress - func->BeginAddress;
@@ -190,7 +193,7 @@ static DWORD64 searchXref(ZydisDecoder* decoder, DWORD64 base, PRUNTIME_FUNCTION
 	return 0;
 }
 
-static PRUNTIME_FUNCTION backtrace(DWORD64 base, PRUNTIME_FUNCTION func) {
+static PRUNTIME_FUNCTION backtrace(DWORD64 base, PIMAGE_AMD64_RUNTIME_FUNCTION_ENTRY func) {
 	if (func->UnwindData & RUNTIME_FUNCTION_INDIRECT)
 		func = (PRUNTIME_FUNCTION)(base + func->UnwindData & ~3);
 
